@@ -91,17 +91,33 @@ class AutofillPopupActivity : ComponentActivity() {
         // Try to get the accessibility service instance and fill
         val node = MyAccessibilityService.currentFocusedNode
         if (node != null) {
+            node.refresh()
+
             val args = android.os.Bundle().apply {
                 putCharSequence(
                     android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
                     value
                 )
             }
-            val success = node.performAction(
+            var success = node.performAction(
                 android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT,
                 args
             )
             Log.d(TAG, "Text inserted via popup: \"$value\" success=$success")
+
+            if (!success) {
+                try {
+                    val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("autofill", value)
+                    clipboard.setPrimaryClip(clip)
+
+                    node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_FOCUS)
+                    success = node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_PASTE)
+                    Log.d(TAG, "Fallback via PASTE success=$success")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error during fallback paste", e)
+                }
+            }
 
             if (!success) {
                 Toast.makeText(this, "Could not insert text", Toast.LENGTH_SHORT).show()
