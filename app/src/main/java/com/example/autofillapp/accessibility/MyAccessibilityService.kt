@@ -106,14 +106,33 @@ class MyAccessibilityService : AccessibilityService() {
             Log.w(TAG, "No focused node to fill")
             return
         }
+        
+        // Refresh the node to ensure it's still valid
+        node.refresh()
+        
         val args = Bundle().apply {
             putCharSequence(
                 AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
                 value
             )
         }
-        val success = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        var success = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
         Log.d(TAG, "Text inserted: \"$value\" success=$success")
+        
+        if (!success) {
+            try {
+                val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("autofill", value)
+                clipboard.setPrimaryClip(clip)
+
+                node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                success = node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+                Log.d(TAG, "Fallback via PASTE success=$success")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during fallback paste", e)
+            }
+        }
+        
         hideOverlay()
     }
 }
