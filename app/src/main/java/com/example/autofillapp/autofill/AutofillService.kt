@@ -20,11 +20,21 @@ import kotlinx.coroutines.runBlocking
 /**
  * Android Autofill Service that fills form fields in other apps using the locally stored and
  * encrypted user profile data.
+ *
+ * Dependencies are resolved via AppDatabase.getInstance (no DI framework needed for MVP).
+ * CryptoManager handles decryption of stored profile data transparently through ProfileRepository.
  */
-class MyAutofillService : AutofillService() {
+class MyCustomAutofillService : AutofillService() {
 
     companion object {
-        private const val TAG = "AutofillService"
+        private const val TAG = "MyCustomAutofillService"
+    }
+
+    // Lazy-initialized dependencies (created once per service lifecycle)
+    private val cryptoManager by lazy { CryptoManager() }
+    private val repository by lazy {
+        val dao = AppDatabase.getInstance(applicationContext).userProfileDao()
+        ProfileRepository(dao, cryptoManager)
     }
 
     override fun onFillRequest(
@@ -34,6 +44,7 @@ class MyAutofillService : AutofillService() {
     ) {
         Log.d(TAG, "onFillRequest called")
 
+        // 1. Get the latest AssistStructure from the fill contexts
         val structure = request.fillContexts.lastOrNull()?.structure
         if (structure == null) {
             Log.w(TAG, "No AssistStructure available")
@@ -41,55 +52,83 @@ class MyAutofillService : AutofillService() {
             return
         }
 
-        // Parse the form fields
+        // 2. Parse ViewNodes — inspect autofillHints, hint, idEntry, inputType
         val parsedFields = AutofillParser.parseStructure(structure)
         if (parsedFields.isEmpty()) {
-            Log.d(TAG, "No autofillable fields found")
+            Log.d(TAG, "No autofillable fields found in the structure")
             callback.onSuccess(null)
             return
         }
+        Log.d(
+                TAG,
+                "Parsed ${parsedFields.size} autofillable fields: ${parsedFields.map { it.fieldType }}"
+        )
 
-        // Get user profile (on binder thread, using runBlocking)
-        val crypto = CryptoManager()
-        val dao = AppDatabase.getInstance(applicationContext).userProfileDao()
-        val repository = ProfileRepository(dao, crypto)
-
+        // 3. Get decrypted user profile from encrypted Room DB via repository
         val profile = runBlocking { repository.getProfileSync() }
 
         if (profile == null) {
-            Log.d(TAG, "No profile stored, skipping autofill")
+            Log.d(TAG, "No profile stored yet, skipping autofill")
             callback.onSuccess(null)
             return
         }
 
-        // Build dataset
-        val datasetBuilder = Dataset.Builder()
+        // 4. Build a Dataset for each matched field
+        val responseBuilder = FillResponse.Builder()
+        // Provide a default presentation (required by some Android versions/OEMs to display the inline UI)
+        val defaultPresentation = RemoteViews(packageName, R.layout.autofill_suggestion).apply {
+            setTextViewText(R.id.autofill_suggestion_text, "AutofillApp")
+        }
+        val datasetBuilder = Dataset.Builder(defaultPresentation)
         var hasAnyValue = false
 
         for (field in parsedFields) {
             val value = AutofillMapper.getValueForField(field.fieldType, profile)
             if (value != null) {
-                val presentation = RemoteViews(packageName, R.layout.autofill_suggestion)
-                presentation.setTextViewText(R.id.autofill_suggestion_text, value)
+                // Build the RemoteViews presentation for this field
+                val label = AutofillMapper.getDisplayLabel(field.fieldType)
+                val presentation =
+                        RemoteViews(packageName, R.layout.autofill_item).apply {
+                            setTextViewText(R.id.autofill_item_value, value)
+                            setTextViewText(
+                                    R.id.autofill_item_label,
+                                    "$label • ${profile.fullName}"
+                            )
+                        }
 
-                datasetBuilder.setValue(
-                        field.autofillId,
-                        AutofillValue.forText(value),
-                        presentation
-                )
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    val presentations = android.service.autofill.Presentations.Builder()
+                            .setMenuPresentation(presentation)
+                            .setDialogPresentation(presentation)
+                            .build()
+                    datasetBuilder.setValue(
+                            field.autofillId,
+                            AutofillValue.forText(value),
+                            presentations
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    datasetBuilder.setValue(
+                            field.autofillId,
+                            AutofillValue.forText(value),
+                            presentation
+                    )
+                }
                 hasAnyValue = true
+                Log.d(TAG, "Matched field ${field.fieldType} -> \"$value\"")
             }
         }
 
         if (!hasAnyValue) {
-            Log.d(TAG, "No matching values for detected fields")
+            Log.d(TAG, "No matching values found for detected fields")
             callback.onSuccess(null)
             return
         }
 
-        val response = FillResponse.Builder().addDataset(datasetBuilder.build()).build()
+        responseBuilder.addDataset(datasetBuilder.build())
+        val response = responseBuilder.build()
 
-        Log.d(TAG, "Returning FillResponse with ${parsedFields.size} fields")
+        Log.d(TAG, "Returning FillResponse with dataset")
         callback.onSuccess(response)
     }
 

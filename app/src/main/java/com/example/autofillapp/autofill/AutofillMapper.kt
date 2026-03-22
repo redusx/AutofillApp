@@ -25,4 +25,20 @@ object AutofillMapper {
                 }
         return value?.takeIf { it.isNotBlank() }
     }
+
+    /** Return a user-facing label for the field type (shown in the autofill suggestion popup). */
+    fun getDisplayLabel(fieldType: FieldType): String {
+        return when (fieldType) {
+            FieldType.EMAIL -> "Email"
+            FieldType.PHONE -> "Phone"
+            FieldType.FULL_NAME -> "Full Name"
+            FieldType.FIRST_NAME -> "First Name"
+            FieldType.LAST_NAME -> "Last Name"
+            FieldType.ADDRESS -> "Address"
+            FieldType.CITY -> "City"
+            FieldType.POSTAL_CODE -> "Postal Code"
+            FieldType.COUNTRY -> "Country"
+            FieldType.UNKNOWN -> ""
+        }
+    }
 }

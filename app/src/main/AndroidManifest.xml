@@ -24,7 +24,7 @@
         </activity>
 
         <service
-            android:name=".autofill.MyAutofillService"
+            android:name=".autofill.MyCustomAutofillService"
             android:exported="true"
             android:permission="android.permission.BIND_AUTOFILL_SERVICE">
             <intent-filter>
