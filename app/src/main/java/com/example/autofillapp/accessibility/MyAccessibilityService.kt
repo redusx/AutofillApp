@@ -41,8 +41,12 @@ class MyAccessibilityService : AccessibilityService() {
             AccessibilityEvent.TYPE_VIEW_CLICKED -> handleFocusEvent(event)
 
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                // Ignore window state changes caused by our own app (e.g. showing the overlay)
+                if (event.packageName?.toString() == packageName) {
+                    return
+                }
                 // App or screen changed — remove overlay
-                Log.d(TAG, "Window state changed, removing overlay")
+                Log.d(TAG, "Window state changed, removing overlay (package: ${event.packageName})")
                 hideOverlay()
             }
         }
