@@ -1,6 +1,7 @@
 package com.example.autofillapp.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.view.autofill.AutofillManager
@@ -57,6 +58,8 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val autofillManager = context.getSystemService(AutofillManager::class.java)
     var isAutofillEnabled by remember { mutableStateOf(false) }
+    var isAccessibilityEnabled by remember { mutableStateOf(false) }
+    var isOverlayGranted by remember { mutableStateOf(false) }
 
     // Re-check status when the screen resumes (user may have changed settings)
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -64,6 +67,10 @@ fun SettingsScreen() {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 isAutofillEnabled = autofillManager?.hasEnabledAutofillServices() == true
+                isAccessibilityEnabled = isAccessibilityServiceEnabled(context)
+                isOverlayGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    Settings.canDrawOverlays(context)
+                } else true
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -74,6 +81,18 @@ fun SettingsScreen() {
             animateColorAsState(
                     targetValue = if (isAutofillEnabled) Color(0xFF4CAF50) else Color(0xFFFF9800),
                     label = "statusColor"
+            )
+
+    val a11yColor by
+            animateColorAsState(
+                    targetValue = if (isAccessibilityEnabled) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                    label = "a11yColor"
+            )
+
+    val overlayColor by
+            animateColorAsState(
+                    targetValue = if (isOverlayGranted) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                    label = "overlayColor"
             )
 
     Scaffold(
@@ -98,60 +117,23 @@ fun SettingsScreen() {
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Status Card
-            Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors =
-                            CardDefaults.cardColors(
-                                    containerColor = statusColor.copy(alpha = 0.12f)
-                            ),
-                    shape = MaterialTheme.shapes.large
-            ) {
-                Row(
-                        modifier = Modifier.fillMaxWidth().padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                            imageVector =
-                                    if (isAutofillEnabled) Icons.Filled.CheckCircle
-                                    else Icons.Filled.Warning,
-                            contentDescription = null,
-                            tint = statusColor,
-                            modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text(
-                                text =
-                                        if (isAutofillEnabled) "Autofill Active"
-                                        else "Autofill Inactive",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = statusColor
-                        )
-                        Text(
-                                text =
-                                        if (isAutofillEnabled)
-                                                "AutofillApp is your active autofill provider."
-                                        else "Enable AutofillApp to auto-fill forms in other apps.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-            }
+            // ── Autofill Service Status ─────────────────────────
+            StatusCard(
+                isEnabled = isAutofillEnabled,
+                statusColor = statusColor,
+                enabledTitle = "Autofill Active",
+                disabledTitle = "Autofill Inactive",
+                enabledDesc = "AutofillApp is your active autofill provider.",
+                disabledDesc = "Enable AutofillApp to auto-fill forms in other apps."
+            )
 
-            // Enable / Open Settings button
             if (!isAutofillEnabled) {
                 Button(
                         onClick = {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                 val intent =
                                         Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
-                                            data =
-                                                    android.net.Uri.parse(
-                                                            "package:${context.packageName}"
-                                                    )
+                                            data = Uri.parse("package:${context.packageName}")
                                         }
                                 context.startActivity(intent)
                             }
@@ -197,6 +179,103 @@ fun SettingsScreen() {
                 }
             }
 
+            // ── Accessibility Service Status ────────────────────
+            StatusCard(
+                isEnabled = isAccessibilityEnabled,
+                statusColor = a11yColor,
+                enabledTitle = "Accessibility Active",
+                disabledTitle = "Accessibility Inactive",
+                enabledDesc = "Overlay autofill button is enabled.",
+                disabledDesc = "Enable to show a floating autofill button in other apps."
+            )
+
+            if (!isAccessibilityEnabled) {
+                Button(
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = MaterialTheme.shapes.large,
+                        colors =
+                                ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                )
+                ) {
+                    Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                            text = "Enable Accessibility Service",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                OutlinedButton(
+                        onClick = {
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = MaterialTheme.shapes.large
+                ) {
+                    Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                            text = "Open Accessibility Settings",
+                            style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+
+            // ── Overlay Permission Status ───────────────────────
+            StatusCard(
+                isEnabled = isOverlayGranted,
+                statusColor = overlayColor,
+                enabledTitle = "Overlay Granted",
+                disabledTitle = "Overlay Not Granted",
+                enabledDesc = "AutofillApp can show floating buttons over other apps.",
+                disabledDesc = "Grant permission to display the autofill overlay button."
+            )
+
+            if (!isOverlayGranted) {
+                Button(
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}")
+                                )
+                                context.startActivity(intent)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = MaterialTheme.shapes.large,
+                        colors =
+                                ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                )
+                ) {
+                    Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                            text = "Grant Overlay Permission",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             // Instructions Card
             Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -230,14 +309,20 @@ fun SettingsScreen() {
 
                     InstructionStep(
                             number = "1",
-                            text = "Open Settings → System → Languages & Input"
+                            text = "Enable Autofill Service above"
                     )
-                    InstructionStep(number = "2", text = "Tap Autofill Service")
-                    InstructionStep(number = "3", text = "Select AutofillApp")
+                    InstructionStep(
+                            number = "2",
+                            text = "Enable Accessibility Service → find AutofillApp"
+                    )
+                    InstructionStep(
+                            number = "3",
+                            text = "Grant Overlay Permission"
+                    )
                     InstructionStep(
                             number = "4",
                             text =
-                                    "Open any app with a form — suggestions will appear automatically"
+                                    "Open any app with a form — a floating button will appear near text fields"
                     )
                 }
             }
@@ -252,6 +337,53 @@ fun SettingsScreen() {
             )
 
             Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun StatusCard(
+    isEnabled: Boolean,
+    statusColor: Color,
+    enabledTitle: String,
+    disabledTitle: String,
+    enabledDesc: String,
+    disabledDesc: String
+) {
+    Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors =
+                    CardDefaults.cardColors(
+                            containerColor = statusColor.copy(alpha = 0.12f)
+                    ),
+            shape = MaterialTheme.shapes.large
+    ) {
+        Row(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                    imageVector =
+                            if (isEnabled) Icons.Filled.CheckCircle
+                            else Icons.Filled.Warning,
+                    contentDescription = null,
+                    tint = statusColor,
+                    modifier = Modifier.size(48.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                        text = if (isEnabled) enabledTitle else disabledTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = statusColor
+                )
+                Text(
+                        text = if (isEnabled) enabledDesc else disabledDesc,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
         }
     }
 }
@@ -286,3 +418,16 @@ private fun InstructionStep(number: String, text: String) {
         )
     }
 }
+
+/**
+ * Check if our AccessibilityService is currently enabled in system settings.
+ */
+private fun isAccessibilityServiceEnabled(context: android.content.Context): Boolean {
+    val serviceName = "${context.packageName}/com.example.autofillapp.accessibility.MyAccessibilityService"
+    val enabledServices = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+    ) ?: return false
+    return enabledServices.contains(serviceName, ignoreCase = true)
+}
+

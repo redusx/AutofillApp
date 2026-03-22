@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">AutofillApp</string>
+    <string name="accessibility_service_description">AutofillApp uses accessibility to show a floating autofill button near text fields in other apps.</string>
 </resources>

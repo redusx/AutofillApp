@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -23,6 +25,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".overlay.AutofillPopupActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AutofillApp.Dialog"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
+
         <service
             android:name=".autofill.MyCustomAutofillService"
             android:exported="true"
@@ -33,6 +42,18 @@
             <meta-data
                 android:name="android.autofill"
                 android:resource="@xml/autofill_service" />
+        </service>
+
+        <service
+            android:name=".accessibility.MyAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service" />
         </service>
 
     </application>

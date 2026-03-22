@@ -96,24 +96,12 @@ class MyCustomAutofillService : AutofillService() {
                             )
                         }
 
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    val presentations = android.service.autofill.Presentations.Builder()
-                            .setMenuPresentation(presentation)
-                            .setDialogPresentation(presentation)
-                            .build()
-                    datasetBuilder.setValue(
-                            field.autofillId,
-                            AutofillValue.forText(value),
-                            presentations
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    datasetBuilder.setValue(
-                            field.autofillId,
-                            AutofillValue.forText(value),
-                            presentation
-                    )
-                }
+                @Suppress("DEPRECATION")
+                datasetBuilder.setValue(
+                        field.autofillId,
+                        AutofillValue.forText(value),
+                        presentation
+                )
                 hasAnyValue = true
                 Log.d(TAG, "Matched field ${field.fieldType} -> \"$value\"")
             }

@@ -2,4 +2,12 @@
 <resources>
 
     <style name="Theme.AutofillApp" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.AutofillApp.Dialog" parent="android:Theme.Material.Light.Dialog.NoActionBar">
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowMinWidthMajor">85%</item>
+        <item name="android:windowMinWidthMinor">85%</item>
+    </style>
 </resources>
